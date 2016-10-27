@@ -76,14 +76,18 @@ class Cursor(common.DBAPICursor):
     visible by other cursors or connections.
     """
 
-    def __init__(self, host, port='8080', username=None, catalog='hive', schema='default',
-                 poll_interval=1, source='pyhive', session_props=None):
+    def __init__(self, host, port='8080', username=None, password=None, catalog='hive', schema='default',
+                 cert=None, proxies={}, verifycert=True, poll_interval=1, source='pyhive', session_props=None):
         """
         :param host: hostname to connect to, e.g. ``presto.example.com``
         :param port: int -- port, defaults to 8080
         :param user: string -- defaults to system user name
+        :param password: string -- defaults to None
         :param catalog: string -- defaults to ``hive``
         :param schema: string -- defaults to ``default``
+        :param cert: string -- full path for HTTPS certificate, defaults to None
+        :param proxies: string -- dictionary with HTTP and HTTPS proxies, defaults to an empty dictionary
+        :param verifycert: string -- verify if the certificate is valid, defaults to True
         :param poll_interval: int -- how often to ask the Presto REST interface for a progress
             update, defaults to a second
         :param source: string -- arbitrary identifier (shows up in the Presto monitoring page)
@@ -93,12 +97,26 @@ class Cursor(common.DBAPICursor):
         self._host = host
         self._port = port
         self._username = username or getpass.getuser()
+        self._password = password
+        self._cert = cert
         self._catalog = catalog
         self._schema = schema
         self._arraysize = 1
         self._poll_interval = poll_interval
         self._source = source
         self._session_props = session_props if session_props is not None else {}
+        self._proxies = {}
+        if "http" in proxies:
+            self._proxies["http"] = proxies["http"]
+            if proxies["http"] == "None":
+                self._proxies["http"] = None
+        if "https" in proxies:
+            self._proxies["https"] = proxies["https"]
+            if proxies["https"] == "None":
+                self._proxies["https"] = None
+        self._verifycert = True
+        if verifycert == "False" or verifycert == False:
+            self._verifycert = False
 
         self._reset_state()
 
@@ -148,6 +166,7 @@ class Cursor(common.DBAPICursor):
             'X-Presto-Schema': self._schema,
             'X-Presto-Source': self._source,
             'X-Presto-User': self._username,
+            'Authorization': "Basic %s" % base64.b64encode('%s:%s' % (self._username, self._password)),
         }
 
         if self._session_props:
@@ -165,11 +184,15 @@ class Cursor(common.DBAPICursor):
         self._reset_state()
 
         self._state = self._STATE_RUNNING
+        protocol = 'http'
+        if self._cert is not None:
+            protocol = 'https'
         url = urlparse.urlunparse((
-            'http', '{}:{}'.format(self._host, self._port), '/v1/statement', None, None, None))
+            protocol, '{}:{}'.format(self._host, self._port), '/v1/statement', None, None, None))
         _logger.info('%s', sql)
         _logger.debug("Headers: %s", headers)
-        response = requests.post(url, data=sql.encode('utf-8'), headers=headers)
+
+        response = requests.post(url, data=sql.encode('utf-8'), headers=headers, proxies=self._proxies, cert=self._cert, verify=self._verifycert)
         self._process_response(response)
 
     def cancel(self):
@@ -201,13 +224,15 @@ class Cursor(common.DBAPICursor):
         if self._nextUri is None:
             assert self._state == self._STATE_FINISHED, "Should be finished if nextUri is None"
             return None
-        response = requests.get(self._nextUri)
+        headers = {'Authorization': "Basic %s" % base64.b64encode('%s:%s' % (self._username, self._password))}
+        response = requests.get(self._nextUri, headers=headers, proxies=self._proxies, cert=self._cert, verify=self._verifycert)
         self._process_response(response)
         return response.json()
 
     def _fetch_more(self):
         """Fetch the next URI and update state"""
-        self._process_response(requests.get(self._nextUri))
+        headers = {'Authorization': "Basic %s" % base64.b64encode('%s:%s' % (self._username, self._password))}
+        self._process_response(requests.get(self._nextUri, headers=headers, proxies=self._proxies, cert=self._cert, verify=self._verifycert))
 
     def _decode_binary(self, rows):
         # As of Presto 0.69, binary data is returned as the varbinary type in base64 format
@@ -225,7 +250,6 @@ class Cursor(common.DBAPICursor):
         if response.status_code != requests.codes.ok:
             fmt = "Unexpected status code {}\n{}"
             raise OperationalError(fmt.format(response.status_code, response.content))
-
         response_json = response.json()
         _logger.debug("Got response %s", response_json)
         assert self._state == self._STATE_RUNNING, "Should be running if processing response"
