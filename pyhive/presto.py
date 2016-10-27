@@ -250,6 +250,7 @@ class Cursor(common.DBAPICursor):
         if response.status_code != requests.codes.ok:
             fmt = "Unexpected status code {}\n{}"
             raise OperationalError(fmt.format(response.status_code, response.content))
+
         response_json = response.json()
         _logger.debug("Got response %s", response_json)
         assert self._state == self._STATE_RUNNING, "Should be running if processing response"
