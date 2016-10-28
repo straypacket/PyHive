@@ -166,7 +166,6 @@ class Cursor(common.DBAPICursor):
             'X-Presto-Schema': self._schema,
             'X-Presto-Source': self._source,
             'X-Presto-User': self._username,
-            'Authorization': "Basic %s" % base64.b64encode('%s:%s' % (self._username, self._password)),
         }
 
         if self._session_props:
@@ -187,6 +186,7 @@ class Cursor(common.DBAPICursor):
         protocol = 'http'
         if self._cert is not None:
             protocol = 'https'
+            headers['Authorization'] = "Basic %s" % base64.b64encode('%s:%s' % (self._username, self._password))
         url = urlparse.urlunparse((
             protocol, '{}:{}'.format(self._host, self._port), '/v1/statement', None, None, None))
         _logger.info('%s', sql)
