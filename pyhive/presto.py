@@ -156,6 +156,56 @@ class Cursor(common.DBAPICursor):
             for col in self._columns
         ]
 
+    def cluster(self, parameters=None):
+        """Get list of queries (query or command).
+
+        Return values are not defined.
+        """
+        headers = {
+            'X-Presto-Catalog': self._catalog,
+            'X-Presto-Schema': self._schema,
+            'X-Presto-Source': self._source,
+            'X-Presto-User': self._username,
+        }
+
+        if self._session_props:
+            headers['X-Presto-Session'] = ','.join(
+                '{}={}'.format(propname, propval)
+                for propname, propval in self._session_props.items()
+            )
+
+        self._reset_state()
+
+        self._state = self._STATE_RUNNING
+        url = urlparse.urlunparse((
+            'http', '{}:{}'.format(self._host, self._port), '/v1/cluster', None, None, None))
+        _logger.debug("Headers: %s", headers)
+        response = requests.get(url, headers=headers)
+        _res = response.json()
+        return _res
+
+    def query(self, parameters=None):
+        """Get list of queries (query or command).
+
+        Return values are not defined.
+        """
+        headers = {
+            'X-Presto-Catalog': self._catalog,
+            'X-Presto-Schema': self._schema,
+            'X-Presto-Source': self._source,
+            'X-Presto-User': self._username,
+        }
+
+        if self._session_props:
+            headers['X-Presto-Session'] = ','.join(
+                '{}={}'.format(propname, propval)
+                for propname, propval in self._session_props.items()
+            )
+
+        self._reset_state()
+
+        self._state = self._STATE_RUNNING
+
     def execute(self, operation, parameters=None):
         """Prepare and execute a database operation (query or command).
 
