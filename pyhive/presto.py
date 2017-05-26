@@ -205,6 +205,13 @@ class Cursor(common.DBAPICursor):
         self._reset_state()
 
         self._state = self._STATE_RUNNING
+        url = urlparse.urlunparse((
+            'http', '{}:{}'.format(self._host, self._port), '/v1/query', None, None, None))
+        _logger.debug("Headers: %s", headers)
+        response = requests.get(url, headers=headers)
+        print response
+        _res = response.json()
+        return _res
 
     def execute(self, operation, parameters=None):
         """Prepare and execute a database operation (query or command).
