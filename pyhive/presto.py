@@ -209,7 +209,6 @@ class Cursor(common.DBAPICursor):
             'http', '{}:{}'.format(self._host, self._port), '/v1/query', None, None, None))
         _logger.debug("Headers: %s", headers)
         response = requests.get(url, headers=headers)
-        print response
         _res = response.json()
         return _res
 
