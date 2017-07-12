@@ -205,11 +205,23 @@ class Cursor(common.DBAPICursor):
         self._reset_state()
 
         self._state = self._STATE_RUNNING
+        protocol = 'http'
+        if self._cert is not None:
+            protocol = 'https'
+            headers['Authorization'] = "Basic %s" % base64.b64encode('%s:%s' % (self._username, self._password))
         url = urlparse.urlunparse((
-            'http', '{}:{}'.format(self._host, self._port), '/v1/query', None, None, None))
+            protocol, '{}:{}'.format(self._host, self._port), '/v1/query', None, None, None))
         _logger.debug("Headers: %s", headers)
-        response = requests.get(url, headers=headers)
-        _res = response.json()
+
+        try:
+            response = requests.get(url, headers=headers, proxies=self._proxies, cert=self._cert, verify=self._verifycert)
+            _res = response.json()
+        except Exception as e:
+            print e
+            print url
+            print headers
+            print response
+
         return _res
 
     def execute(self, operation, parameters=None):
